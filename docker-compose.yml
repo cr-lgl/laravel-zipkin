@@ -1,0 +1,88 @@
+version: '3.1'
+
+services:
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: ./Dockerfile
+    depends_on:
+      - service-a
+      - service-b
+
+  service-a:
+    build:
+      context: ./
+      dockerfile: ./php-fpm/Dockerfile
+      args:
+        - PROJECT_PATH=./ServiceA
+    depends_on:
+      - zipkin
+
+  service-b:
+    build:
+      context: ./
+      dockerfile: ./php-fpm/Dockerfile
+      args:
+        - PROJECT_PATH=./ServiceB
+    depends_on:
+      - zipkin
+
+  storage:
+    image: openzipkin/zipkin-cassandra
+    container_name: cassandra
+
+  zipkin:
+    image: openzipkin/zipkin
+    environment:
+      - STORAGE_TYPE=cassandra3
+      - CASSANDRA_CONTACT_POINTS=cassandra
+    ports:
+      - 9411:9411
+    depends_on:
+      - storage
+
+  zipkin-ui:
+    image: openzipkin/zipkin-ui
+    environment:
+      - ZIPKIN_BASE_URL=http://zipkin:9411
+    ports:
+      - 80:80
+    depends_on:
+      - zipkin
+
+  dependencies:
+    image: openzipkin/zipkin-dependencies
+    entrypoint: crond -f
+    environment:
+      - STORAGE_TYPE=cassandra3
+      - CASSANDRA_CONTACT_POINTS=cassandra
+    depends_on:
+      - storage
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - 9090:9090
+    depends_on:
+      - storage
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - 3000:3000
+    depends_on:
+      - prometheus
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+
+  setup_grafana_datasource:
+    image: appropriate/curl
+    depends_on:
+      - grafana
+    volumes:
+      - ./prometheus/create-datasource-and-dashboard.sh:/create.sh:ro
+    command: /create.sh
