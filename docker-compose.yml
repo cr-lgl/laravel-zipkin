@@ -7,32 +7,31 @@ services:
       dockerfile: ./Dockerfile
     depends_on:
       - service-a
-      - service-b
 
   service-a:
     build:
       context: ./
       dockerfile: ./php-fpm/Dockerfile
-      args:
-        - PROJECT_PATH=./ServiceA
+    volumes:
+      - ./ServiceA:/var/www/html:delegated
     depends_on:
-      - zipkin
+      - service-b
 
   service-b:
     build:
       context: ./
       dockerfile: ./php-fpm/Dockerfile
-      args:
-        - PROJECT_PATH=./ServiceB
+    volumes:
+      - ./ServiceB:/var/www/html:delegated
     depends_on:
       - zipkin
 
   storage:
-    image: openzipkin/zipkin-cassandra
+    image: openzipkin/zipkin-cassandra:2.19.0
     container_name: cassandra
 
   zipkin:
-    image: openzipkin/zipkin
+    image: openzipkin/zipkin:2.19.1
     environment:
       - STORAGE_TYPE=cassandra3
       - CASSANDRA_CONTACT_POINTS=cassandra
@@ -42,7 +41,7 @@ services:
       - storage
 
   zipkin-ui:
-    image: openzipkin/zipkin-ui
+    image: openzipkin/zipkin-ui:2.19.0
     environment:
       - ZIPKIN_BASE_URL=http://zipkin:9411
     ports:
@@ -51,7 +50,7 @@ services:
       - zipkin
 
   dependencies:
-    image: openzipkin/zipkin-dependencies
+    image: openzipkin/zipkin-dependencies:2.4.0
     entrypoint: crond -f
     environment:
       - STORAGE_TYPE=cassandra3
@@ -60,7 +59,7 @@ services:
       - storage
 
   prometheus:
-    image: prom/prometheus
+    image: prom/prometheus:v2.13.1
     container_name: prometheus
     ports:
       - 9090:9090
@@ -70,7 +69,7 @@ services:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
 
   grafana:
-    image: grafana/grafana
+    image: grafana/grafana:6.4.3
     ports:
       - 3000:3000
     depends_on:
@@ -80,7 +79,7 @@ services:
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
 
   setup_grafana_datasource:
-    image: appropriate/curl
+    image: appropriate/curl:edge
     depends_on:
       - grafana
     volumes:
